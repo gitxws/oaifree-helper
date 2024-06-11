@@ -22,7 +22,7 @@
 
 
 # Worker 部署（一键直达）
-   [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/jyx04/oaifree_helper)
+   [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/gitxws/oaifree-helper)
    - 一键为全家桶，包含主服务/选车面板服务/API服务/反代voice服务，且无需手动关联KV，即点即用
    - 配置完成后，请按照下方Turnstile人机验证服务教程，获得`站点密钥`和`密钥`
    - 访问部署域名，在初始界面一键保存各项变量，完成部署！
