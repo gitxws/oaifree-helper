@@ -15,6 +15,7 @@
    - 支持人机验证
    - 点击登录页Logo跳转管理面板,包含用户管理、token池管理、用量查询、token批量导出
    - 支持替换Chat页面显示的头像/用户名/邮箱【新】
+   - 支持道德审查接口【新】
    <img width="500" alt="image" src="https://github.com/jyx04/oaifree_helper/assets/166741903/3675a0bf-efd4-4cf3-a42b-4e96fab83bb2">
    <img width="500" alt="image" src="https://github.com/jyx04/oaifree-helper/assets/166741903/f440f0b8-7682-4d68-9eb4-9d8be2eccccd">
    <img width="500" alt="image" src="https://github.com/jyx04/oaifree-helper/assets/166741903/0cd4e326-5580-4c45-8868-8474bbaf3756">
@@ -24,11 +25,12 @@
 # Worker 部署（一键直达）
    [![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/gitxws/oaifree-helper)
    - 一键为全家桶，包含主服务/选车面板服务/API服务/反代voice服务，且无需手动关联KV，即点即用
-   - 配置完成后，请按照下方Turnstile人机验证服务教程，获得`站点密钥`和`密钥`
+   - 配置完成后，如需添加人机验证器防爆破，请按照下方Turnstile人机验证服务教程，获得`站点密钥`和`密钥`
    - 访问部署域名，在初始界面一键保存各项变量，完成部署！
    - 添加token：在登陆页点击logo，选择Token Management进入token管理面板添加
 # Worker 部署（手动部署）
-### 1. 配置Turnstile人机验证服务（不可跳过）
+### 1. 配置Turnstile人机验证服务（不建议跳过）
+   - 如需跳过，后期将`RemoveTurnstile`参数设置为1即可
    - 注册/登陆你的cloudflare，右上角可设置语言为中文。
    - 左侧找到`Turnstile`，选择`添加站点`
    - `站点名称`随意，`域`为：`workers.dev`或你自己的域名
@@ -50,12 +52,13 @@
 ```
 Admin //管理员，用于管理面板的验证使用，且可看所有聊天记录【必填】
 TurnstileKeys //turnsile的密钥【必填】
-TurnstileSiteKey //站点密钥【必填】
+TurnstileSiteKey //turnsile的密钥【必填】
+RemoveTurnstile//跳过turnsile人机验证。设置跳过，以上两参数随便填
 WebName //站点名称
 WorkerURL //站点域名，无需https://若无自己的域名，则为worker默认域名：[worker名].[用户名].workers.dev
 LogoURL //图片地址，需https://，若无图床可填图片本地base64编码，不宜过大
 ChatLogoURL //chat界面显示的用户头像地址，需https://，若无图床可填图片本地base64编码，不宜过大
-ChatUesrName //chat界面显示的用户名
+ChatUserName //chat界面显示的用户名
 ChatMail //chat界面显示的用户邮箱
 
 Users //默认用户，以aaa,bbb,ccc形式填写，能访问所有车牌
@@ -138,6 +141,11 @@ at_2
    - OneAPI/NewAPI示例：
    - <img width="300" alt="image" src="https://github.com/jyx04/oaifree-helper/assets/166741903/a01912c5-f43e-4c62-8b76-d47d80aeca00">
 
+
+### 8. 接入道德审查功能（新增）
+   - 此功能代码完全来自[Linux.do-Lvguanjun](https://linux.do/t/topic/99742)，感谢大佬！
+   - 如需启用此功能，需在KV中新增变量`ModerationApiKey`,填入始皇oaipro的apikey
+
 ### 8. 个性化和杂项
    - 参考以下环境变量
      ```
@@ -165,3 +173,4 @@ at_2
  - 支持反代始皇新彩蛋：voice服务
  - 支持替换Chat页面显示的头像/用户名/邮箱
  - 新增Chat页面用户名显示车次的功能
+ - 优化token批量导出功能和转api功能，确保at自动刷新

@@ -7,6 +7,8 @@ addEventListener('fetch', event => {
  
  
  //通用函数
+
+
  function parseJwt(token) {
   const base64Url = token.split('.')[1];// 获取载荷部分
   const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
@@ -14,6 +16,49 @@ addEventListener('fetch', event => {
       return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
   }).join(''));
   return JSON.parse(jsonPayload);// 返回载荷解析后的 JSON 对象
+}
+
+//刷新AT
+async function refreshAT(tochecktoken,an) {
+  // 检查 token 是否存在，如果不存在或为空字符串，直接返回 true  
+  const accessTokenKey = `at_${an}`;
+const token = tochecktoken || await KV.get(accessTokenKey) ||'';
+if (token && token !== "Bad_RT" && token !== "Old_AT")
+{
+ const payload = parseJwt(token);
+const currentTime = Math.floor(Date.now() / 1000);// 获取当前时间戳（秒）
+if (payload.exp > currentTime ){
+  return token
+}
+}
+  const refreshTokenKey = `rt_${an}`;
+  const url = 'https://token.oaifree.com/api/auth/refresh';
+ const refreshToken = await KV.get(refreshTokenKey);
+ if (refreshToken) {
+  // 发送 POST 请求
+ const response = await fetch(url, {
+     method: 'POST',
+     headers: {
+         'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+     },
+     body: `refresh_token=${refreshToken}`
+ });
+
+ // 检查响应状态
+   if (response.ok) {
+     const data = await response.json();
+     const newAccessToken = data.access_token;
+     await KV.put(accessTokenKey, newAccessToken);
+     return newAccessToken;
+     } else {
+     await KV.put(accessTokenKey, "Bad_RT");
+     return '';
+      }
+} 
+else {
+  await KV.put(accessTokenKey, "Old_AT");
+  return '';
+}
 }
 
 
@@ -37,6 +82,8 @@ function generatePassword(token) {
   return hashStr.substring(0, 15)
 }
 async function verifyTurnstile(responseToken) {
+  const removeTurnstile = await KV.get('RemoveTurnstile')||'';
+  if (removeTurnstile){return 'true'}
   const verifyUrl = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
   const secretKey = await KV.get('TurnstileKeys');
   const response = await fetch(verifyUrl, {
@@ -56,6 +103,30 @@ async function usermatch(userName, usertype) {
   return typeUsersArray.includes(userName); // 检查用户名是否在类型用户数组中
 }
 
+// 使用 OpenAI 的道德审核接口检查内容
+async function checkContentForModeration(messages, apiKey) {
+  const response = await fetch("https://api.oaipro.com/v1/moderations", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({ input: messages }),
+  });
+  // 检查 HTTP 响应是否成功
+  if (response.ok) {
+    // response.ok 是一个便捷属性，当状态码在 200-299 范围内时为 true
+    const data = await response.json();
+    return {
+      shouldBlock: data.results.some((result) => result.flagged),
+    };
+  } else {
+    console.error("Moderation API returned an error:", response.status);
+    return { shouldBlock: false }; // 如果 API 调用失败，假定内容是安全的
+  }
+}
+
+
 //各种路径的功能
 async function handleRequest(request) {
   const url = new URL(request.url);
@@ -64,6 +135,7 @@ async function handleRequest(request) {
   const chatlogourl = await KV.get('ChatLogoURL') || await KV.get('LogoURL') || logo;
   const chatusername = await KV.get('ChatUserName') || 'Haibara AI';
   const chatmail = await KV.get('ChatMail') || 'Power by Pandora';
+  const apiKey = await KV.get('ModerationApiKey');
    const cookies = request.headers.get('Cookie');
   let aian = '';
 if (cookies) {
@@ -170,6 +242,46 @@ if (cookies) {
      url.protocol = 'https';
      return fetch(new Request(url, request));
    }
+
+  if (apiKey) {
+    if (url.pathname === "/backend-api/conversation") {
+        const requestBody = await request.json();
+        const userMessages = requestBody.messages
+            .filter(
+                (msg) =>
+                    msg.author.role === "user" && msg.content.content_type === "text"
+            )
+            .map((msg) => msg.content.parts.join(" "));
+
+        if (userMessages.length > 0) {
+            const moderationResult = await checkContentForModeration(
+                userMessages,
+                apiKey
+            );
+            if (moderationResult.shouldBlock) {
+              const UserName = userMessages;
+              await deletelog(UserName,aian,'Message');
+              
+                return new Response(
+                    JSON.stringify({ detail: "此内容可能违反了我们的使用政策" }),
+                    {
+                        status: 451,
+                        headers: { "Content-Type": "application/json" },
+                    }
+                );
+            }
+        }
+        
+        url.host = "new.oaifree.com";
+        const newnewRequest = new Request(url, {
+            body: JSON.stringify(requestBody),
+            method: request.method,
+            headers: request.headers,
+        });
+        return fetch(newnewRequest);
+    }
+}
+  
   //Voice地址和其他
  url.host = 'new.oaifree.com';
  const modifiedRequest = new Request(url, request);
@@ -234,7 +346,7 @@ async function handleInitialPostRequest(request) {
     'TurnstileKeys', 'TurnstileSiteKey', 'Users', 'VIPUsers', 'FreeUsers', 
     'Admin', 'ForceAN', 'SetAN', 'PlusMode', 'FreeMode', 'WebName', 
     'WorkerURL','VoiceURL', 'LogoURL', 'CDKEY', 'AutoDeleteCDK', 'FKDomain', 'Status',
-    'PlusAliveAccounts', 'FreeAliveAccounts', 'rt_1', 'rt_2', 'at_1', 'at_2', 'FreeURL', 'ChatUesrName', 'ChatMail', 'ChatLogoURL'
+    'PlusAliveAccounts', 'FreeAliveAccounts', 'rt_1', 'rt_2', 'at_1', 'at_2', 'FreeURL', 'ChatUserName', 'ChatMail', 'ChatLogoURL', 'RemoveTurnstile','ModerationApiKey'
   ];
 
   for (const field of fields) {
@@ -352,13 +464,15 @@ function getInitialFieldsHTML() {
     { name: 'Admin', label: '【必填】管理员 (用于管理面板的验证使用，且可看所有聊天记录)' ,isrequired: 'required'},
     { name: 'TurnstileKeys', label: '【必填】Turnstile密钥' ,isrequired: 'required'},
     { name: 'TurnstileSiteKey', label: '【必填】Turnstile站点密钥' ,isrequired: 'required'},
+    { name: 'Remove Turnstile', label: '【选填】有值则禁用Turnstile验证，以上两个参数随意' },
+    { name: 'ModerationApiKey', label: '【选填】如需启用道德审查，则填入始皇oaipro的apikey' },
     { name: 'WorkerURL', label: '站点域名 (无需https://【选填，不填则自动储存worker的域名】' },
     { name: 'VoiceURL', label: 'voice服务域名 (无需https://【选填，不填则自动储存worker的域名】' },
     { name: 'FreeURL', label: 'Free选车面板域名 (无需https://【选填，不填则自动储存worker的域名】' },
     { name: 'WebName', label: '站点名称' },
     { name: 'LogoURL', label: 'Logo图片地址 (需https://)' },
     { name: 'ChatLogoURL', label: 'chat界面用户头像地址(需https://)' },
-    { name: 'ChatUesrName', label: 'chat界面用户名 (需https://)' },
+    { name: 'ChatUserName', label: 'chat界面用户名 (需https://)' },
     { name: 'ChatMail', label: 'chat界面用户邮箱 (需https://)' },
     { name: 'Users', label: '默认用户 (以aaa,bbb,ccc形式填写)' },
     { name: 'VIPUsers', label: 'VIP用户 (即私车用户，无速率和时间限制)' },
@@ -415,21 +529,6 @@ async function handlePlusPostRequest(request) {
     return generatePlusResponse('Unauthorized access.', adminuserName);
   }
 
-  // 处理 JSON 格式的 refreshToken
-  let jsonAccessToken, jsonRefreshToken;
-  try {
-    const tokenData = JSON.parse(refreshToken);
-    if (tokenData.access_token) {
-      jsonAccessToken = tokenData.access_token;
-    } else if (tokenData.refresh_token) {
-      jsonRefreshToken = tokenData.refresh_token;
-    }else if (tokenData.accessToken) {
-      jsonAccessToken = tokenData.accessToken;
-      jsonRefreshToken = '';
-    }
-  } catch (e) {
-    // 输入不是 JSON 格式
-  }
 
   // 更新跟车 users
   if (accountUsers) {
@@ -439,6 +538,36 @@ async function handlePlusPostRequest(request) {
     const updatedUsers = `${currentUsers},${newUsers}`;
     await KV.put('VIPUsers', updatedUsers);
   }
+
+  // 处理 JSON 格式的 refreshToken
+  let jsonAccessToken, jsonRefreshToken;
+  try {
+    const tokenData = JSON.parse(refreshToken);
+    const rtKey = `rt_${accountNumber}`;
+    const atKey = `at_${accountNumber}`;
+    if (tokenData.access_token) {
+      jsonAccessToken = tokenData.access_token;
+      jsonRefreshToken = tokenData.refresh_token ||'';
+      await KV.put(atKey, jsonAccessToken);
+      await KV.put(rtKey, jsonRefreshToken);
+      await addToAliveAccountList(jsonAccessToken, accountNumber);
+      return generatePlusResponse(`account_number:\n${accountNumber}\n\nrefresh_token:\n${jsonRefreshToken}\n\naccess_token:\n${jsonAccessToken}`, adminuserName);
+    } else if (tokenData.accessToken) {
+      jsonAccessToken = tokenData.accessToken;
+      jsonRefreshToken = '';
+      await KV.put(atKey, jsonAccessToken);
+      await KV.put(rtKey, jsonRefreshToken);
+      await addToAliveAccountList(jsonAccessToken, accountNumber);
+      return generatePlusResponse(`account_number:\n${accountNumber}\n\nrefresh_token:\n${jsonRefreshToken}\n\naccess_token:\n${jsonAccessToken}`, adminuserName);
+    }
+ //   const result = await processToken(refreshToken, accountNumber, adminuserName);
+ // return result;
+
+  } catch (e) {
+    // 输入不是 JSON 格式
+  }
+
+  
 
   // 批量处理非 JSON 格式的 token
   if (!jsonAccessToken && refreshToken.includes(',')) {
@@ -463,7 +592,7 @@ async function processToken(token, accountNumber, adminuserName) {
   const rtKey = `rt_${accountNumber}`;
   const atKey = `at_${accountNumber}`;
 
-  // 使用非 JSON 格式的 token
+  // 使用st
   if (token.startsWith('fk-')) {
     await KV.put(atKey, token);
     await addToAliveAccountList('', accountNumber);
@@ -547,7 +676,7 @@ async function addToAliveAccountList(accessToken, accountNumber) {
   const accountType = await checkAccountType(accessToken);
   const aliveAccountsKey = `${accountType}AliveAccounts`;
 
-  let aliveAccount = await KV.get(aliveAccountsKey) || '';
+  let aliveAccount = await KV.get(aliveAccountsKey);
   let aliveAccountList = aliveAccount ? aliveAccount.split(',') : [];
   if (!aliveAccountList.includes(accountNumber)) {
     aliveAccountList.push(accountNumber);
@@ -583,6 +712,7 @@ async function generatePlusResponse(message, adminuserName) {
 async function getPlusHTML() {
   const WorkerURL = await KV.get('WorkerURL');
   const turnstileSiteKey = await KV.get('TurnstileSiteKey');
+  const removeTurnstile = await KV.get('RemoveTurnstile')||'';
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -673,7 +803,7 @@ async function getPlusHTML() {
     <form id="managePlus" action="/token" method="POST">
       <label for="adminusername">Admin Username:</label>
       <input type="password" id="adminsername" name="adminusername" required>
-      <label for="refresh_token">Refresh Token (or AT):</label>
+      <label for="refresh_token">RT/AT:</label>
       <input type="text" id="refresh_token" name="refresh_token" required>
       <label for="account_number">Account Number:</label>
       <input type="number" id="account_number" name="account_number" required>
@@ -692,6 +822,10 @@ async function getPlusHTML() {
     </form>
   </div>
   <script>
+  if ('${removeTurnstile}') {
+       document.getElementById('cf-turnstile-response').value= "111";
+      }
+
   function onTurnstileCallback(token) {
     document.getElementById('cf-turnstile-response').value = token;
   }
@@ -737,24 +871,33 @@ async function exportToken(tokenType, accountType) {
   const accountTypeKey = `${accountType}AliveAccounts`;
 
   // 获取对应类型的账户列表
-  let aliveAccount = await KV.get(accountTypeKey) || '';
+  let aliveAccount = await KV.get(accountTypeKey);
   if (!aliveAccount) {
     return new Response('No accounts found', { status: 404 });
   }
 
   let accountNumbers = aliveAccount.split(',');
-
-  // 获取所有账户号码对应的令牌
   let tokens = [];
-  for (let accountNumber of accountNumbers) {
-    let tokenKey = `${tokenType}_${accountNumber}`;
-    let token = await KV.get(tokenKey);
-    if (token) {
-      tokens.push(token);
-    }
+
+  // 分批次处理账户，假设每批次处理 10 个账户
+  const batchSize = 10;
+  for (let i = 0; i < accountNumbers.length; i += batchSize) {
+    const batch = accountNumbers.slice(i, i + batchSize);
+
+    // 使用 Promise.all 并行处理
+    const batchTokens = await Promise.all(batch.map(async (accountNumber) => {
+      if (tokenType == 'at') {
+        return await refreshAT('', accountNumber);
+      } else {
+        let rtKey = `${tokenType}_${accountNumber}`;
+        return await KV.get(rtKey);
+      }
+    }));
+
+    tokens.push(...batchTokens);
   }
 
-  // 创建txt文件
+  // 创建 txt 文件
   let fileContent = tokens.join('\n');
   let fileName = `${tokenType}.txt`;
 
@@ -811,6 +954,7 @@ else {return new Response('Unauthorized access', { status: 403 });
 
 async function getExportHTML() {
   const turnstileSiteKey = await KV.get('TurnstileSiteKey');
+  const removeTurnstile = await KV.get('RemoveTurnstile')||'';
   return `
   <!DOCTYPE html>
   <html lang="en">
@@ -901,6 +1045,9 @@ async function getExportHTML() {
       </form>
     </div>
     <script>
+    if ('${removeTurnstile}') {
+       document.getElementById('cf-turnstile-response').value= "111";
+      }
       function onTurnstileCallback(token) {
         document.getElementById('cf-turnstile-response').value = token;
       }
@@ -992,6 +1139,7 @@ async function generateAdminResponse(message) {
 async function getAdminHTML() {
   const WorkerURL=await KV.get('WorkerURL');
   const turnstileSiteKey=await KV.get('TurnstileSiteKey');
+  const removeTurnstile = await KV.get('RemoveTurnstile')||'';
   return `
   <!DOCTYPE html>
 <html lang="en">
@@ -1120,6 +1268,9 @@ async function getAdminHTML() {
     <div class="cf-turnstile" data-sitekey="${turnstileSiteKey}" data-callback="onTurnstileCallback"></div>
   </div>
   <script>
+  if ('${removeTurnstile}') {
+       document.getElementById('cf-turnstile-response').value= "111";
+      }
   function onTurnstileCallback(token) {
     document.getElementById('cf-turnstile-response').value = token;
   }
@@ -1397,6 +1548,7 @@ async function queryLimits(accessToken, shareToken) {
 
 async function getUserHTML() {
   const turnstileSiteKey=await KV.get('TurnstileSiteKey');
+  const removeTurnstile = await KV.get('RemoveTurnstile')||'';
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -1496,6 +1648,9 @@ async function getUserHTML() {
     </form>
   </div>
   <script>
+if ('${removeTurnstile}') {
+       document.getElementById('cf-turnstile-response').value= "111";
+      }
   function onTurnstileCallback(token) {
     document.getElementById('cf-turnstile-response').value = token;
   }
@@ -1594,6 +1749,7 @@ async function getRegisterHTML() {
   const turnstileSiteKey=await KV.get('TurnstileSiteKey');
   const websiteName = await KV.get('WebName') || 'Haibara AI';
   const logourl = await KV.get('LogoURL') || logo;
+  const removeTurnstile = await KV.get('RemoveTurnstile')||'';
   return `
   <!DOCTYPE html>
   <html lang="en">
@@ -2023,6 +2179,9 @@ async function getRegisterHTML() {
                 <p>&copy; All rights reserved. | For private testing.</p>
             </footer>
               <script>
+              if ('${removeTurnstile}') {
+       document.getElementById('cf-turnstile-response').value= "111";
+      }
                   document.addEventListener('DOMContentLoaded', function() {
                       const cdkeyInput = document.getElementById('cdkey');
                       const usernameWrapper = document.getElementById('usernameWrapper');
@@ -2192,6 +2351,7 @@ async function saveUsageLogs(usersData) {
 
 
 async function getTableUserHTML() {
+  const removeTurnstile = await KV.get('RemoveTurnstile')||'';
   const turnstileSiteKey = await KV.get('TurnstileSiteKey');
   return `
   <!DOCTYPE html>
@@ -2291,6 +2451,9 @@ async function getTableUserHTML() {
       </form>
     </div>
     <script>
+    if ('${removeTurnstile}') {
+       document.getElementById('cf-turnstile-response').value= "111";
+      }
     function onTurnstileCallback(token) {
       document.getElementById('cf-turnstile-response').value = token;
     }
@@ -3064,6 +3227,7 @@ async function getLoginHTML(setan) {
   const turnstileSiteKey=await KV.get('TurnstileSiteKey');
   const websiteName = await KV.get('WebName') || 'Haibara AI';
   const logourl = await KV.get('LogoURL') || logo;
+  const removeTurnstile = await KV.get('RemoveTurnstile')||'';
    const commonHTML = `
      <!DOCTYPE html>
      <html lang="en">
@@ -3521,6 +3685,9 @@ async function getLoginHTML(setan) {
             </footer>
             
          <script>
+         if ('${removeTurnstile}') {
+       document.getElementById('cf-turnstile-response').value= "111";
+      }
              document.addEventListener('DOMContentLoaded', function() {
                  const helpIcon = document.querySelector('.help-icon');
                  const tooltip = document.createElement('div');
