@@ -306,6 +306,13 @@ if (cookies) {
    data.picture = `${chatlogourl}`;
    data.email = `${chatmail}`;
    data.name = `${chatusername} [${aian}]`;
+   data.phone_number = ''; //phone_number 为空字符串
+   // 遍历orgs.data数组，修改description字段为空字符串
+   if (data.orgs && data.orgs.data) {
+      data.orgs.data.forEach(org => {
+         org.description = '';
+        });
+   }   
    return new Response(JSON.stringify(data), {
      status: response.status,
      headers: response.headers
