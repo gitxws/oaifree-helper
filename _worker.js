@@ -3657,7 +3657,7 @@ async function getLoginHTML(setan) {
                                          required
                                          placeholder=" "
                                      />
-                                     <label class="email-label" for="un">Username</label>
+                                     <label class="email-label" for="un">输入访问密钥</label>
                                  </div>`;
  
    const aliveAccountOptions = await getAliveAccountOptions();
