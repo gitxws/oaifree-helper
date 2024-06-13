@@ -138,6 +138,11 @@ async function handleRequest(request) {
   const apiKey = await KV.get('ModerationApiKey');
    const cookies = request.headers.get('Cookie');
   let aian = '';
+  // 如果请求是HTTP，则重定向到HTTPS
+  if (url.protocol === 'http:') {
+    url.protocol = 'https:';
+    return Response.redirect(url.toString(), 301);
+  }  
 if (cookies) {
   const cookiesArray = cookies.split(';');
   for (const cookie of cookiesArray) {
@@ -239,7 +244,7 @@ if (cookies) {
        }
      } */
      url.host = 'new.oaifree.com';
-     url.protocol = 'https';
+     //url.protocol = 'https';
      return fetch(new Request(url, request));
    }
 
@@ -458,7 +463,7 @@ async function getInitialHTML() {
       <h1>Variable Shortcut Entry</h1>
       <form id="variableEntryForm" action="/" method="POST">
         ${getInitialFieldsHTML()}
-        <button type="submit">Submit</button>
+        <button type="submit">提交</button>
       </form>
     </div>
   </body>
@@ -471,7 +476,7 @@ function getInitialFieldsHTML() {
     { name: 'Admin', label: '【必填】管理员 (用于管理面板的验证使用，且可看所有聊天记录)' ,isrequired: 'required'},
     { name: 'TurnstileKeys', label: '【必填】Turnstile密钥' ,isrequired: 'required'},
     { name: 'TurnstileSiteKey', label: '【必填】Turnstile站点密钥' ,isrequired: 'required'},
-    { name: 'Remove Turnstile', label: '【选填】有值则禁用Turnstile验证，以上两个参数随意' },
+    { name: 'RemoveTurnstile', label: '【选填】有值则禁用Turnstile验证，以上两个参数随意' },
     { name: 'ModerationApiKey', label: '【选填】如需启用道德审查，则填入始皇oaipro的apikey' },
     { name: 'WorkerURL', label: '站点域名 (无需https://【选填，不填则自动储存worker的域名】' },
     { name: 'VoiceURL', label: 'voice服务域名 (无需https://【选填，不填则自动储存worker的域名】' },
@@ -702,7 +707,7 @@ async function generatePlusResponse(message, adminuserName) {
   `;
 
   const replacements = [
-    { target: '<button type="submit">Submit</button>', replacement: errorHtml + '<button class="continue-btn" type="submit">Continue</button>' },
+    { target: '<button type="submit">提交</button>', replacement: errorHtml + '<button class="continue-btn" type="submit">继续</button>' },
     { target: '<input type="password" id="adminsername" name="adminusername" required>', replacement: `<input type="password" id="adminsername" name="adminusername" value="${adminuserName}" required>` },
   ];
 
@@ -818,7 +823,7 @@ async function getPlusHTML() {
       <input type="text" id="account_users" name="account_users">
       <input type="hidden" id="cf-turnstile-response" name="cf-turnstile-response" required>
       <div class="button-container">
-        <button type="submit">Submit</button>
+        <button type="submit">提交</button>
         <div class="row">
           <button type="button" onclick="window.location.href='https://token.oaifree.com/auth'">Get Token</button>
           <button type="button" onclick="window.location.href='https://${WorkerURL}'">Go Login</button>
@@ -1137,8 +1142,8 @@ async function generateAdminResponse(message) {
  `;
  const html = await getAdminHTML();
  const responseHtml = html.replace(
-   '<button type="submit">Submit</button>',
-   errorHtml + '<button type="submit">Submit</button>'
+   '<button type="submit">提交</button>',
+   errorHtml + '<button type="submit">提交</button>'
  );
  return new Response(responseHtml, { headers: { 'Content-Type': 'text/html' } });
 }
@@ -1261,7 +1266,7 @@ async function getAdminHTML() {
       </select>
       <label for="temporary_account">Temporary Account:</label>
       <input type="text" id="temporary_account" name="temporary_account">
-      <button type="submit">Submit</button>
+      <button type="submit">提交</button>
     </form>
     <div class="tokenmanagement-buttons">
       <a href="https://${WorkerURL}/token">Token Management</a>
@@ -1476,8 +1481,8 @@ async function generateUserResponse(message) {
  `;
  const html = await getUserHTML();
  const responseHtml = html.replace(
-   '<button type="submit">Submit</button>',
-   errorHtml + '<button type="submit">Submit</button>'
+   '<button type="submit">提交</button>',
+   errorHtml + '<button type="submit">提交</button>'
  );
  return new Response(responseHtml, { headers: { 'Content-Type': 'text/html' } });
 }
@@ -1649,7 +1654,7 @@ async function getUserHTML() {
         <option value="delete">Delete Users</option>
        
       </select>
-      <button type="submit">Submit</button>
+      <button type="submit">提交</button>
       <div style="height: 20px;"></div>
       <div class="cf-turnstile" data-sitekey="${turnstileSiteKey}" data-callback="onTurnstileCallback"></div>
     </form>
@@ -1744,8 +1749,8 @@ async function generateRegisterResponse(message) {
    `;
    const html = await getRegisterHTML();
    const responseHtml = html.replace(
-     '<button class="continue-btn" type="button" id="continueBtn">Continue</button>',
-     errorHtml + '<button class="continue-btn" type="button" id="continueBtn">Continue</button>'
+     '<button class="continue-btn" type="button" id="continueBtn">继续</button>',
+     errorHtml + '<button class="continue-btn" type="button" id="continueBtn">继续</button>'
    );
    return new Response(responseHtml, { headers: { 'Content-Type': 'text/html' } });
  }
@@ -2171,7 +2176,7 @@ async function getRegisterHTML() {
                                       <label class="email-label" for="username">Your Username</label>
                                     </div>
                                       <input type="hidden" id="cf-turnstile-response" name="cf-turnstile-response" required>
-                                      <button class="continue-btn" type="button" id="continueBtn">Continue</button>
+                                      <button class="continue-btn" type="button" id="continueBtn">继续</button>
                                       <div class="cf-turnstile" data-sitekey="${turnstileSiteKey}" data-callback="onTurnstileCallback"></div>
                                   </form>
           
@@ -2183,7 +2188,7 @@ async function getRegisterHTML() {
                   </div>
               </div>
               <footer class="footer">
-                <p>&copy; All rights reserved. | For private testing.</p>
+                <p>&copy; 2024 保留所有权利 | 仅供个人测试</p>
             </footer>
               <script>
               if ('${removeTurnstile}') {
@@ -3189,8 +3194,8 @@ async function generateLoginResponse(message) {
    `;
    const html = await getLoginHTML(setan);
    const responseHtml = html.replace(
-     '<button class="continue-btn" type="submit">Continue</button>',
-     errorHtml + '<button class="continue-btn" type="submit">Continue</button>'
+     '<button class="continue-btn" type="submit">继续</button>',
+     errorHtml + '<button class="continue-btn" type="submit">继续</button>'
    );
    return new Response(responseHtml, { headers: { 'Content-Type': 'text/html' } });
  }
@@ -3672,23 +3677,18 @@ async function getLoginHTML(setan) {
                                  </div>`;
  
    const commonHTML2 = `
-                                 <div class="checkbox-wrapper">
-                                     <input type="checkbox" id="an-issues" name="anissues" />
-                                     <label class="checkbox-label" for="an-issues">Report Account Issues</label>
-                                 </div>
-                                 <button class="continue-btn" type="submit">Continue</button>
+
+                                 <button class="continue-btn" type="submit">继续</button>
                                  <input type="hidden" id="cf-turnstile-response" name="cf-turnstile-response" required>
                                  <div class="cf-turnstile" data-sitekey="${turnstileSiteKey}" data-callback="onTurnstileCallback"></div>
                              </form>
-                             <div class="divider-wrapper"><span class="divider">Or</span></div>
-                             <p class="other-page">Don't have an account? <a class="other-page-link" href="https://${WorkerURL}/register">Sign Up</a></p>
                          </div>
                      </section>
                  </main>
              </div>
          </div>
          <footer class="footer">
-                <p>&copy; All rights reserved. | For private testing.</p>
+                <p>&copy; 2024 保留所有权利 | 仅供个人测试</p>
             </footer>
             
          <script>
