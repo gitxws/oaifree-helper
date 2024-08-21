@@ -332,6 +332,18 @@ if (cookies) {
      headers: response.headers
    });
  }
+ if (url.pathname === '/backend-api/accounts/check') {
+  const data = await response.json();
+  for (const accountId in data.accounts) {
+    if (data.accounts[accountId].account) {
+      data.accounts[accountId].account.name = `${chatusername} [${aian}]`;
+    }
+  }
+  return new Response(JSON.stringify(data), {
+    status: response.status,
+    headers: response.headers
+  });
+} 
    return response;
 }
 
