@@ -358,13 +358,10 @@ status: response.status,
 headers: response.headers
 });
 }
-if (url.pathname.startsWith('/backend-api/accounts/users')) {
-  const data = await response.json();
-  data.items = '';
-  return new Response(JSON.stringify(data), {
-   status: response.status,
-   headers: response.headers
-  });
+if (url.pathname.startsWith('/backend-api/accounts/')) {
+  
+  return new Response('Unauthorized access', { status: 403 }
+  );
 }   
    return response;
 }
